@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-'''
+"""
 Copyright 2015 Randal S. Olson
 
 This file is part of the reddit Twitter Bot library.
@@ -16,10 +16,9 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
 License for more details. You should have received a copy of the GNU General
 Public License along with the reddit Twitter Bot library.
 If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
-import praw
-import json
+import praw  # version 3.6.0
 import requests
 import tweepy
 import time
@@ -43,10 +42,10 @@ IMAGE_DIR = 'img'
 POSTED_CACHE = 'posted_posts.txt'
 
 # Place the string you want to add at the end of your tweets (can be empty)
-TWEET_SUFFIX = ' #dataviz'
+TWEET_SUFFIX = ' #elitedangerous'
 
 # Place the maximum length for a tweet
-TWEET_MAX_LEN = 140
+TWEET_MAX_LEN = 280
 
 # Place the time you want to wait between each tweets (in seconds)
 DELAY_BETWEEN_TWEETS = 30
@@ -54,15 +53,16 @@ DELAY_BETWEEN_TWEETS = 30
 # Place the lengths of t.co links (cf https://dev.twitter.com/overview/t.co)
 T_CO_LINKS_LEN = 24
 
+
 def setup_connection_reddit(subreddit):
-    ''' Creates a connection to the reddit API. '''
+    """Creates a connection to the reddit API."""
     print('[bot] Setting up connection with reddit')
     reddit_api = praw.Reddit('reddit Twitter tool monitoring {}'.format(subreddit))
     return reddit_api.get_subreddit(subreddit)
 
 
 def tweet_creator(subreddit_info):
-    ''' Looks up posts from reddit and shortens the URLs to them. '''
+    """Looks up posts from reddit and shortens the URLs to them."""
     post_dict = {}
     post_ids = []
 
@@ -96,7 +96,7 @@ def tweet_creator(subreddit_info):
 
 
 def already_tweeted(post_id):
-    ''' Checks if the reddit Twitter bot has already tweeted a post. '''
+    """Checks if the reddit Twitter bot has already tweeted a post."""
     found = False
     with open(POSTED_CACHE, 'r') as in_file:
         for line in in_file:
@@ -107,7 +107,7 @@ def already_tweeted(post_id):
 
 
 def strip_title(title, num_characters):
-    ''' Shortens the title of the post to the 140 character limit. '''
+    """Shortens the title of the post to the 140 character limit."""
 
     # How much you strip from the title depends on how much extra text
     # (URLs, hashtags, etc.) that you add to the tweet
@@ -121,8 +121,8 @@ def strip_title(title, num_characters):
 
 
 def get_image(img_url):
-    ''' Downloads i.imgur.com images that reddit posts may point to. '''
-    if 'imgur.com' in img_url:
+    """Downloads i.imgur.com and i.redd.it images that reddit posts may point to."""
+    if ('imgur.com' in img_url) or ('i.redd.it' in img_url):
         file_name = os.path.basename(urllib.parse.urlsplit(img_url).path)
         img_path = IMAGE_DIR + '/' + file_name
         print('[bot] Downloading image at URL ' + img_url + ' to ' + img_path)
@@ -136,12 +136,12 @@ def get_image(img_url):
         else:
             print('[bot] Image failed to download. Status code: ' + resp.status_code)
     else:
-        print('[bot] Post doesn\'t point to an i.imgur.com link')
+        print('[bot] Post doesn\'t point to an i.imgur.com or i.redd.it link')
     return ''
 
 
 def tweeter(post_dict, post_ids):
-    ''' Tweets all of the selected reddit posts. '''
+    """Tweets all of the selected reddit posts."""
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
     api = tweepy.API(auth)
@@ -166,13 +166,13 @@ def tweeter(post_dict, post_ids):
 
 
 def log_tweet(post_id):
-    ''' Takes note of when the reddit Twitter bot tweeted a post. '''
+    """Takes note of when the reddit Twitter bot tweeted a post."""
     with open(POSTED_CACHE, 'a') as out_file:
         out_file.write(str(post_id) + '\n')
 
 
 def main():
-    ''' Runs through the bot posting routine once. '''
+    """Runs through the bot posting routine once."""
     # If the tweet tracking file does not already exist, create it
     if not os.path.exists(POSTED_CACHE):
         with open(POSTED_CACHE, 'w'):
@@ -187,6 +187,7 @@ def main():
     # Clean out the image cache
     for filename in glob(IMAGE_DIR + '/*'):
         os.remove(filename)
+
 
 if __name__ == '__main__':
     main()
