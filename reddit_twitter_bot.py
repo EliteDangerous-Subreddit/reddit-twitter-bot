@@ -18,7 +18,8 @@ Public License along with the reddit Twitter Bot library.
 If not, see http://www.gnu.org/licenses/.
 """
 
-import praw  # version 3.6.0
+import praw
+import json
 import requests
 import tweepy
 import time
@@ -31,6 +32,11 @@ ACCESS_TOKEN = ''
 ACCESS_TOKEN_SECRET = ''
 CONSUMER_KEY = ''
 CONSUMER_SECRET = ''
+
+# Place your reddit API keys here
+CLIENT_ID = ''
+CLIENT_SECRET = ''
+USER_AGENT = ''
 
 # Place the subreddit you want to look up posts from here
 SUBREDDIT_TO_MONITOR = ''
@@ -55,10 +61,13 @@ T_CO_LINKS_LEN = 24
 
 
 def setup_connection_reddit(subreddit):
-    """Creates a connection to the reddit API."""
+    """Creates a read-only connection to the reddit API."""
     print('[bot] Setting up connection with reddit')
-    reddit_api = praw.Reddit('reddit Twitter tool monitoring {}'.format(subreddit))
-    return reddit_api.get_subreddit(subreddit)
+    reddit_api = praw.Reddit(client_id=CLIENT_ID,
+                             client_secret=CLIENT_SECRET,
+                             user_agent=USER_AGENT)
+
+    return reddit_api.subreddit(subreddit)
 
 
 def tweet_creator(subreddit_info):
@@ -68,14 +77,15 @@ def tweet_creator(subreddit_info):
 
     print('[bot] Getting posts from reddit')
 
-    # You can use the following "get" functions to get posts from reddit:
-    #   - get_top(): gets the most-upvoted posts (ignoring post age)
-    #   - get_hot(): gets the most-upvoted posts (taking post age into account)
-    #   - get_new(): gets the newest posts
+    # You can use the following methods on the "front" object to get posts from reddit:
+    #   - front.top(): gets the most-upvoted posts (ignoring post age)
+    #   - front.hot(): gets the most-upvoted posts (taking post age into account)
+    #   - front.new(): gets the newest posts
+    #   - front.rising(): gets rising posts
     #
     # "limit" tells the API the maximum number of posts to look up
 
-    for submission in subreddit_info.get_hot(limit=5):
+    for submission in subreddit_info.front.hot(limit=5):
         if not already_tweeted(submission.id):
             # This stores a link to the reddit post itself
             # If you want to link to what the post is linking to instead, use
@@ -108,7 +118,6 @@ def already_tweeted(post_id):
 
 def strip_title(title, num_characters):
     """Shortens the title of the post to the 140 character limit."""
-
     # How much you strip from the title depends on how much extra text
     # (URLs, hashtags, etc.) that you add to the tweet
     # Note: it is annoying but some short urls like "data.gov" will be
