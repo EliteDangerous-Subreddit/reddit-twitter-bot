@@ -24,7 +24,6 @@ import os
 import urllib.parse
 import random
 import sqlite3
-from itertools import chain
 
 # Place your reddit API keys here
 CLIENT_ID = ''
@@ -79,27 +78,45 @@ def grabber_func(subreddit_info, cursor):
 
     print('[bot] Getting posts from reddit\n')
 
-    # Flip a coin to decide whether to have 3 hot posts, or 2 hot posts + 1 rising.
-    # Idea is that 1/6 posts are from rising, but only 3 are grabbed each day
-    # The funny list comprehensions are needed to ignore the stickied posts
-    posts_list = random.choice([[x for x in subreddit_info.hot(limit=5) if x.stickied is False][:3],
-                               list(chain([y for y in subreddit_info.hot(limit=4) if y.stickied is False][:2],
-                                          list(subreddit_info.random_rising(limit=1))))])
+    # Cycles through hot posts + some rising ones until it stores 3 posts total
+    counter = 0
+    hot_gen = subreddit_info.hot()
+    while counter < 3:
 
-    for submission in posts_list:
-        t = (submission.id,)
-        cursor.execute('SELECT count(*) FROM tblqueue WHERE id=?', t)
-        if int(cursor.fetchone()[0]) < 1:  # only insert records that aren't already in the db
-
-            contents = (submission.id, submission.title, submission.permalink,
-                        submission.created_utc, get_image(submission.url), 0)
-
-            print('[bot] Attempting to insert {} into database (5 untweeted records max, oldest ones are removed)\n'
-                  .format(str(submission.id)))
-            cursor.execute('INSERT INTO tblqueue VALUES (?, ?, ?, ?, ?, ?)', contents)
+        if random.randrange(6) == 5:
+            print('[bot] Attempting to find a good rising post')
+            for post in subreddit_info.rising():
+                if post.score > 50:
+                    print('[bot] Found a good rising post')
+                    submission = post
+                    break
+            else:
+                print('[bot] Failed to find a good rising post')
+                submission = hot_gen.next()
 
         else:
-            print('[bot] Already tweeted: {}\n'.format(str(submission)))
+            submission = hot_gen.next()
+
+        # only insert records that aren't already in the db
+        t = (submission.id,)
+        cursor.execute('SELECT count(*) FROM tblqueue WHERE id=?', t)
+        if int(cursor.fetchone()[0]) < 1:
+            if submission.stickied is False:
+
+                contents = (submission.id, submission.title, '/u/'+submission.author.name,
+                            submission.created_utc, get_image(submission.url), 0)
+
+                print('[bot] Attempting to insert {} into database (5 untweeted records max, oldest ones are removed)\n'
+                      .format(str(submission.id)))
+                cursor.execute('INSERT INTO tblqueue VALUES (?, ?, ?, ?, ?, ?)', contents)
+                counter += 1
+                if counter == 3:
+                    break
+            else:
+                print('[bot] Not tweeting {}: stickied post.\n'.format(str(submission.id)))
+
+        else:
+            print('[bot] Already stored: {}\n'.format(str(submission.id)))
 
 
 def main():
@@ -116,7 +133,7 @@ def main():
 
     # is_tweeted is a self-explanatory boolean value, in SQLite 0 = False and 1 = True
     c.execute('''CREATE TABLE IF NOT EXISTS tblqueue
-                 (id TEXT PRIMARY KEY, title TEXT, post_link TEXT, 
+                 (id TEXT PRIMARY KEY, title TEXT, user TEXT, 
                  created_at BIGINT, image_path TEXT, is_tweeted INT)''')
 
     # The trigger enforces the size limit on the db (5 untweeted records max)
@@ -134,8 +151,11 @@ def main():
 
     subreddit = setup_connection_reddit(SUBREDDIT_TO_MONITOR)
     grabber_func(subreddit, c)
+    # for row in c.execute('SELECT * FROM tblqueue').fetchall():
+    #     print(row)
     db.commit()  # commit changes to the db
     db.close()
+    print('[bot] Closed')
 
 
 if __name__ == '__main__':
