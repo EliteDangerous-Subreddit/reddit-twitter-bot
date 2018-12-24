@@ -33,6 +33,9 @@ USER_AGENT = ''
 # Place the subreddit you want to look up posts from here
 SUBREDDIT_TO_MONITOR = 'elitedangerous'
 
+# Place the minimum no. of votes for rising posts you want to tweet
+POST_SCORE_THRESHOLD = 30
+
 # Place the name of the folder where the images are downloaded
 IMAGE_DIR = ''
 
@@ -86,7 +89,7 @@ def grabber_func(subreddit_info, cursor):
         if random.randrange(6) == 5:
             print('[bot] Attempting to find a good rising post')
             for post in subreddit_info.rising():
-                if post.score > 50:
+                if post.score > POST_SCORE_THRESHOLD:
                     print('[bot] Found a good rising post')
                     submission = post
                     break
@@ -106,8 +109,7 @@ def grabber_func(subreddit_info, cursor):
                 contents = (submission.id, submission.title, '/u/'+submission.author.name,
                             submission.created_utc, get_image(submission.url), 0)
 
-                print('[bot] Attempting to insert {} into database (5 untweeted records max, oldest ones are removed)\n'
-                      .format(str(submission.id)))
+                print('[bot] Inserting {} into database\n'.format(str(submission.id)))
                 cursor.execute('INSERT INTO tblqueue VALUES (?, ?, ?, ?, ?, ?)', contents)
                 counter += 1
                 if counter == 3:
@@ -117,6 +119,15 @@ def grabber_func(subreddit_info, cursor):
 
         else:
             print('[bot] Already stored: {}\n'.format(str(submission.id)))
+
+
+def fancy_remove(post_id, img_path):
+    """ Helper function that deletes images from removed records and tells the user about it """
+
+    if img_path is not '':
+        print('[bot] Removing image {} taken from post kicked out of db'.format(img_path))
+        os.remove(img_path)
+    print('[bot] Removing post {} from db due to size limit on untweeted items\n'.format(post_id))
 
 
 def main():
@@ -138,13 +149,21 @@ def main():
 
     # The trigger enforces the size limit on the db (5 untweeted records max)
     # Previously-tweeted records remain in the db in order to check future posts
+    # The trigger also calls functions that remove the images of deleted records and tells the user about it.
+
+    db.create_function('del_item', 2, fancy_remove)
+
     c.execute('''    
     CREATE TRIGGER IF NOT EXISTS limit_size
     AFTER INSERT ON tblqueue
     BEGIN
+        SELECT del_item(id, image_path) FROM tblqueue 
+        WHERE created_at = (SELECT min(created_at) FROM tblqueue WHERE is_tweeted = 0)
+        AND (SELECT count(*) FROM tblqueue WHERE is_tweeted = 0) = 6;
+        
         DELETE FROM tblqueue WHERE 
         created_at = (SELECT min(created_at) FROM tblqueue WHERE is_tweeted = 0) 
-        AND (SELECT count(*) FROM tblqueue WHERE is_tweeted = 0) = 6;
+        AND (SELECT count(*) FROM tblqueue WHERE is_tweeted = 0) = 6; 
     END
     ;
     ''')
@@ -152,7 +171,7 @@ def main():
     subreddit = setup_connection_reddit(SUBREDDIT_TO_MONITOR)
     grabber_func(subreddit, c)
     # for row in c.execute('SELECT * FROM tblqueue').fetchall():
-    #     print(row)
+    #    print(row)
     db.commit()  # commit changes to the db
     db.close()
     print('[bot] Closed')
