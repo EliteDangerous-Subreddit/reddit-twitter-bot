@@ -61,10 +61,10 @@ def tweeter_func(api, cursor):
     img_path = post[4]
 
     extra_text = ' by ' + post[2] + '\n' + TWEET_SUFFIX + '\n' + 'https://redd.it/'+post[0]
-    extra_text_len = 2 + 4 + len(post[2]) + 1 + len(TWEET_SUFFIX) + 1 + len('https://redd.it/'+post[0])
+    extra_text_len = len(extra_text)
     if img_path:  # Image counts as a link
         extra_text_len += T_CO_LINKS_LEN  # not fully accurate, work on later
-    post_text = '"' + strip_title(post[1], TWEET_MAX_LEN - extra_text_len) + '"' + extra_text
+    post_text = '"' + strip_title(post[1], TWEET_MAX_LEN - extra_text_len - 2) + '"' + extra_text
     print('[bot] Posting this link on Twitter')
     print(post_text + '\n')
     if img_path:

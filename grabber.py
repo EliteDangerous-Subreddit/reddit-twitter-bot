@@ -32,6 +32,7 @@ USER_AGENT = ''
 
 # Place the subreddit you want to look up posts from here
 SUBREDDIT_TO_MONITOR = 'elitedangerous'
+POST_SCORE_THRESHOLD = 50
 
 # Place the minimum no. of votes for rising posts you want to tweet
 POST_SCORE_THRESHOLD = 30
@@ -98,6 +99,7 @@ def grabber_func(subreddit_info, cursor):
                 submission = hot_gen.next()
 
         else:
+            print('[bot] Failed to find a good rising post')
             submission = hot_gen.next()
 
         # only insert records that aren't already in the db
