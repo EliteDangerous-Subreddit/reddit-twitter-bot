@@ -21,6 +21,8 @@ If not, see http://www.gnu.org/licenses/.
 import tweepy
 import os
 import sqlite3
+import random
+from datetime import datetime
 
 # Place your Twitter API keys here
 ACCESS_TOKEN = ''
@@ -30,6 +32,7 @@ CONSUMER_SECRET = ''
 
 # Place the name of the folder where the images are downloaded
 IMAGE_DIR = ''
+
 
 # Place the string you want to add at the end of your tweets (can be empty)
 TWEET_SUFFIX = '#EliteDangerous #EliteReddit'
@@ -49,11 +52,8 @@ def strip_title(title, num_characters):
         return title[:num_characters - 1] + '…'
 
 
-def tweeter_func(cursor):
+def tweeter_func(api, cursor):
     """ Tweets the oldest untweeted post in the db (FIFO) """
-    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
-    auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-    api = tweepy.API(auth)
 
     cursor.execute('''SELECT * FROM tblqueue 
                       WHERE created_at = (SELECT min(created_at) FROM tblqueue WHERE is_tweeted = 0)''')
@@ -81,26 +81,41 @@ def tweeter_func(cursor):
 
 
 def main():
-    """ Runs through the bot posting routine once, tweeting oldest items in queue. """
+    """ Checks the time since last tweet, and decides to tweet semi-randomly. """
 
-    print('[bot] Igniting engines')
-    if not os.path.exists(IMAGE_DIR):
-        print('[bot] Making image directory')
-        os.makedirs(IMAGE_DIR)
+    print('[bot] Waking up')
 
-    db = sqlite3.connect('posts.db')
-    c = db.cursor()
+    auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
+    auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+    api = tweepy.API(auth)
 
-    # is_tweeted is a self-explanatory boolean value, in SQLite 0 = False and 1 = True
-    c.execute('''CREATE TABLE IF NOT EXISTS tblqueue
-                 (id TEXT PRIMARY KEY, title TEXT, post_link TEXT, 
-                 created_at BIGINT, image_path TEXT, is_tweeted INT)''')
+    last_status = tweepy.Cursor(api.user_timeline).items(1).next()
+    since_last = (datetime.utcnow() - last_status.created_at)
+    hours_since_last = since_last.total_seconds() // 3600  # divide by the amount of seconds in 1 hour
 
-    tweeter_func(c)
-    # for row in c.execute('SELECT * FROM tblqueue').fetchall():
-    #    print(row)
-    db.commit()
-    db.close()
+    if random.random() * (hours_since_last - 4) > 1:
+        print('[bot] Conditional passed, igniting engines')
+
+        if not os.path.exists(IMAGE_DIR):
+            print('[bot] Making image directory')
+            os.makedirs(IMAGE_DIR)
+
+        db = sqlite3.connect('posts.db')
+        c = db.cursor()
+
+        # is_tweeted is a self-explanatory boolean value, in SQLite 0 = False and 1 = True
+        c.execute('''CREATE TABLE IF NOT EXISTS tblqueue
+                     (id TEXT PRIMARY KEY, title TEXT, post_link TEXT, 
+                     created_at BIGINT, image_path TEXT, is_tweeted INT)''')
+
+        tweeter_func(api, c)
+        # for row in c.execute('SELECT * FROM tblqueue').fetchall():
+        #    print(row)
+        db.commit()
+        db.close()
+
+    else:
+        print('[bot] Conditional failed, going back to sleep')
 
 
 if __name__ == '__main__':
