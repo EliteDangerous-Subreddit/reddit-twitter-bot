@@ -32,6 +32,7 @@ USER_AGENT = ''
 
 # Place the subreddit you want to look up posts from here
 SUBREDDIT_TO_MONITOR = 'elitedangerous'
+POST_SCORE_THRESHOLD = 50
 
 # Place the name of the folder where the images are downloaded
 IMAGE_DIR = ''
@@ -86,7 +87,7 @@ def grabber_func(subreddit_info, cursor):
         if random.randrange(6) == 5:
             print('[bot] Attempting to find a good rising post')
             for post in subreddit_info.rising():
-                if post.score > 50:
+                if post.score > POST_SCORE_THRESHOLD:
                     print('[bot] Found a good rising post')
                     submission = post
                     break
@@ -95,6 +96,7 @@ def grabber_func(subreddit_info, cursor):
                 submission = hot_gen.next()
 
         else:
+            print('[bot] Failed to find a good rising post')
             submission = hot_gen.next()
 
         # only insert records that aren't already in the db
