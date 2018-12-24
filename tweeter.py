@@ -33,7 +33,6 @@ CONSUMER_SECRET = ''
 # Place the name of the folder where the images are downloaded
 IMAGE_DIR = ''
 
-
 # Place the string you want to add at the end of your tweets (can be empty)
 TWEET_SUFFIX = '#EliteDangerous #EliteReddit'
 
@@ -91,9 +90,8 @@ def main():
 
     last_status = tweepy.Cursor(api.user_timeline).items(1).next()
     since_last = (datetime.utcnow() - last_status.created_at)
-    hours_since_last = since_last.total_seconds() // 3600  # divide by the amount of seconds in 1 hour
 
-    if random.random() * (hours_since_last - 4) > 1:
+    if random.random() * (since_last.total_seconds() - 14400) > 3600:  # tweet every 4 hours + some randomness
         print('[bot] Conditional passed, igniting engines')
 
         if not os.path.exists(IMAGE_DIR):
