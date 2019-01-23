@@ -176,7 +176,7 @@ def main():
 
 # Initialize global variables from config file
 config = configparser.ConfigParser()
-config.read('config.example.ini')
+config.read('config.ini')
 
 reddit = config['reddit.com']
 CLIENT_ID            = reddit.get('client_id')
