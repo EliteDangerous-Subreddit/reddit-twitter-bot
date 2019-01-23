@@ -7,54 +7,7 @@ import requests
 import os
 import urllib.parse
 import random
-
-# TODO: Put this all in a config.ini file
-
-# Place your reddit API keys here
-CLIENT_ID = ''
-CLIENT_SECRET = ''
-USER_AGENT = ''
-
-# Place the subreddit you want to look up posts from here
-SUBREDDIT_TO_MONITOR = 'elitedangerous'
-
-# Place the minimum no. of votes for rising posts you want to tweet
-POST_SCORE_THRESHOLD = 30
-
-# Place your twitter API keys here
-ACCESS_TOKEN = ''
-ACCESS_TOKEN_SECRET = ''
-CONSUMER_KEY = ''
-CONSUMER_SECRET = ''
-
-# Place the name of the folder where the images are downloaded
-IMAGE_DIR = ''
-
-# Place the hashtags you want to include with each tweet
-HASHTAGS = '#EliteDangerous #EliteReddit'
-
-# Place the maximum length for a tweet
-TWEET_MAX_LEN = 280
-
-# Place the lengths of t.co links (cf https://dev.twitter.com/overview/t.co)
-T_CO_LINKS_LEN = 24
-
-# Probability to try and get a rising post with each func call
-PROBABILITY = '30%'
-
-NSFW_ALLOWED = False
-
-SPOILERS_ALLOWED = False
-
-EXCLUDED_FLAIRS = 'help, modpost, meta'.split(', ')
-
-EXCLUDED_KEYWORDS = 'hate, braben, shit, rank, pad, pvp'.split(', ')
-
-# Min number of hours since last tweet
-MIN_TIME_SINCE_LAST = 5
-
-# Probability that a post will be tweeted if the time since last exceeds the previously specified min no. of hours
-TWEET_PROBABILITY = '70%'
+import configparser
 
 
 def setup_connection_reddit(subreddit):
@@ -96,9 +49,9 @@ def passes_criteria(submission):
         return False
     if (SPOILERS_ALLOWED is False) and submission.spoiler:
         return False
-    if any(keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS):
+    if any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]):
         return False
-    if any(flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS):
+    if any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]):
         return False
     if submission.score < POST_SCORE_THRESHOLD:
         return False
@@ -110,7 +63,7 @@ def grabber_func(subreddit_info):
 
     print('[bot] Getting posts from reddit\n')
     # roll a dice, if it lands on 6, search for a good rising post
-    if random.random() <= (float(PROBABILITY.replace('%', ''))/100):
+    if random.random() <= (float(RISING_PROBABILITY)/100):
         print('[bot] Attempting to find a good rising post')
         for submission in subreddit_info.rising():
             if passes_criteria(submission):
@@ -133,18 +86,20 @@ def grabber_func(subreddit_info):
 
 
 def tweeter_func(twitter_api, submission):
-    """ Takes a PRAW submission object and tweets it"""
+    """ Takes a PRAW submission object and tweets it """
 
     img_path = get_media(submission.url)
 
     extra_text = ' by ' + str(submission.author.name).replace('None', '[deleted]') \
                  + '\n' + HASHTAGS + '\n' + 'https://redd.it/'+submission.id
+
     extra_text_len = len(extra_text)
     if img_path:  # Image counts as a link
         extra_text_len += T_CO_LINKS_LEN  # not fully accurate, work on later
     post_text = '"' + strip_title(submission.title, TWEET_MAX_LEN - extra_text_len - 2) + '"' + extra_text
     print('[bot] Posting this link on Twitter')
     print(post_text + '\n')
+
     if img_path:
         print('[bot] With image ' + img_path)
         twitter_api.update_with_media(filename=img_path, status=post_text)
@@ -188,7 +143,7 @@ def main():
     """ Checks the time since last tweet, and decides to tweet semi-randomly. """
 
     print('[bot] Waking up\n')
-    # create directories, database, table and trigger upon initial startup
+    # create directories upon initial startup
     if not os.path.exists(IMAGE_DIR):
         print('[bot] Making image directory')
         os.makedirs(IMAGE_DIR)
@@ -200,22 +155,54 @@ def main():
     auth = tweepy.OAuthHandler(CONSUMER_KEY, CONSUMER_SECRET)
     auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
     twitter_api = tweepy.API(auth)
-    print('[bot] Successfully auth\'d with twitter, getting user_timeline')
+    print("[bot] Successfully auth'd with twitter, getting user_timeline")
 
     last_status = twitter_api.user_timeline(count=1)[0]
     since_last = (datetime.utcnow() - last_status.created_at)
     # tweet every X hours + some randomness
     if since_last.total_seconds() > MIN_TIME_SINCE_LAST*60*60 \
-            and random.random() < float(TWEET_PROBABILITY.replace('%', ''))/100:
+            and random.random() < float(TWEET_PROBABILITY)/100:
         print('[bot] Conditional passed, igniting engines')
         subreddit = setup_connection_reddit(SUBREDDIT_TO_MONITOR)
         post = grabber_func(subreddit)
         if post is not None:
             tweeter_func(twitter_api, post)
+        else:
+            print('[bot] Failed to find a good post, going back to sleep')
 
     else:
         print('[bot] Conditional failed, going back to sleep')
 
+
+# Initialize global variables from config file
+config = configparser.ConfigParser()
+config.read('config.example.ini')
+
+reddit = config['reddit.com']
+CLIENT_ID            = reddit.get('client_id')
+CLIENT_SECRET        = reddit.get('client_secret')
+USER_AGENT           = reddit.get('user_agent')
+
+twitter = config['twitter.com']
+ACCESS_TOKEN         = twitter.get('access_token')
+ACCESS_TOKEN_SECRET  = twitter.get('access_token_secret')
+CONSUMER_KEY         = twitter.get('consumer_key')
+CONSUMER_SECRET      = twitter.get('consumer_secret')
+TWEET_MAX_LEN        = int(twitter.get('tweet_max_len'))
+T_CO_LINKS_LEN       = int(twitter.get('t_co_links_len'))
+
+settings = config['twitter-bot-settings']
+SUBREDDIT_TO_MONITOR = settings.get('subreddit_to_monitor')
+POST_SCORE_THRESHOLD = int(settings.get('post_score_threshold'))
+IMAGE_DIR            = settings.get('image_dir')
+RISING_PROBABILITY   = float(settings.get('rising_probability'))
+NSFW_ALLOWED         = bool(settings.get('nsfw_allowed'))
+SPOILERS_ALLOWED     = bool(settings.get('spoilers_allowed'))
+MIN_TIME_SINCE_LAST  = int(settings.get('min_time_since_last'))
+TWEET_PROBABILITY    = float(settings.get('tweet_probability'))
+EXCLUDED_FLAIRS      = settings.get('excluded_flairs').split(', ')
+EXCLUDED_KEYWORDS    = settings.get('excluded_keywords').split(', ')
+HASHTAGS             = ' '.join(['#'+hashtag for hashtag in settings.get('hashtags').split(', ')])
 
 if __name__ == '__main__':
     main()
