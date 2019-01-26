@@ -44,16 +44,15 @@ def already_tweeted(post_id):
 def passes_criteria(submission):
     """ Takes a submission and checks if it passes all the criteria specified in the config """
 
-    # Ugly as hell, refine code later
-    if (NSFW_ALLOWED is False) and submission.over_18:
-        return False
-    if (SPOILERS_ALLOWED is False) and submission.spoiler:
-        return False
-    if any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]):
-        return False
-    if any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]):
-        return False
-    if submission.score < POST_SCORE_THRESHOLD:
+    conditionals = [
+        (NSFW_ALLOWED is False) and submission.over_18,
+        (SPOILERS_ALLOWED is False) and submission.spoiler,
+        any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]),
+        any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]),
+        submission.score < POST_SCORE_THRESHOLD
+    ]
+
+    if any(conditionals):
         return False
     return True
 
@@ -62,7 +61,7 @@ def grabber_func(subreddit_info):
     """ Gets a post from the subreddit for tweeting. """
 
     print('[bot] Getting posts from reddit\n')
-    # roll a dice, if it lands on 6, search for a good rising post
+    # The probability of checking 'rising' is set by the user
     if random.random() <= (float(RISING_PROBABILITY)/100):
         print('[bot] Attempting to find a good rising post')
         for submission in subreddit_info.rising():
