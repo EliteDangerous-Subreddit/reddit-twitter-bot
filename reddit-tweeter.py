@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import tweepy
-from datetime import datetime
+import schedule
 import praw
 import requests
 import os
 import urllib.parse
 import random
 import configparser
+import time
 
 
 def setup_connection_reddit(subreddit):
@@ -44,16 +45,15 @@ def already_tweeted(post_id):
 def passes_criteria(submission):
     """ Takes a submission and checks if it passes all the criteria specified in the config """
 
-    # Ugly as hell, refine code later
-    if (NSFW_ALLOWED is False) and submission.over_18:
-        return False
-    if (SPOILERS_ALLOWED is False) and submission.spoiler:
-        return False
-    if any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]):
-        return False
-    if any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]):
-        return False
-    if submission.score < POST_SCORE_THRESHOLD:
+    conditionals = [
+        (NSFW_ALLOWED is False) and submission.over_18,
+        (SPOILERS_ALLOWED is False) and submission.spoiler,
+        any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]),
+        any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]),
+        submission.score < POST_SCORE_THRESHOLD
+    ]
+
+    if any(conditionals):
         return False
     return True
 
@@ -141,7 +141,6 @@ def get_media(img_url):
 
 def main():
     """ Checks the time since last tweet, and decides to tweet semi-randomly. """
-
     print('[bot] Waking up\n')
     # create directories upon initial startup
     if not os.path.exists(IMAGE_DIR):
@@ -156,22 +155,12 @@ def main():
     auth.set_access_token(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
     twitter_api = tweepy.API(auth)
     print("[bot] Successfully auth'd with twitter, getting user_timeline")
-
-    last_status = twitter_api.user_timeline(count=1)[0]
-    since_last = (datetime.utcnow() - last_status.created_at)
-    # tweet every X hours + some randomness
-    if since_last.total_seconds() > MIN_TIME_SINCE_LAST*60*60 \
-            and random.random() < float(TWEET_PROBABILITY)/100:
-        print('[bot] Conditional passed, igniting engines')
-        subreddit = setup_connection_reddit(SUBREDDIT_TO_MONITOR)
-        post = grabber_func(subreddit)
-        if post is not None:
-            tweeter_func(twitter_api, post)
-        else:
-            print('[bot] Failed to find a good post, going back to sleep')
-
+    subreddit = setup_connection_reddit(SUBREDDIT_TO_MONITOR)
+    post = grabber_func(subreddit)
+    if post is not None:
+        tweeter_func(twitter_api, post)
     else:
-        print('[bot] Conditional failed, going back to sleep')
+        print('[bot] Failed to find a good post, going back to sleep')
 
 
 # Initialize global variables from config file
@@ -199,10 +188,13 @@ RISING_PROBABILITY   = float(settings.get('rising_probability'))
 NSFW_ALLOWED         = bool(settings.get('nsfw_allowed'))
 SPOILERS_ALLOWED     = bool(settings.get('spoilers_allowed'))
 MIN_TIME_SINCE_LAST  = int(settings.get('min_time_since_last'))
-TWEET_PROBABILITY    = float(settings.get('tweet_probability'))
+MAX_TIME_SINCE_LAST    = int(settings.get('max_time_since_last'))
 EXCLUDED_FLAIRS      = settings.get('excluded_flairs').split(', ')
 EXCLUDED_KEYWORDS    = settings.get('excluded_keywords').split(', ')
 HASHTAGS             = ' '.join(['#'+hashtag for hashtag in settings.get('hashtags').split(', ')])
 
-if __name__ == '__main__':
-    main()
+schedule.every(MIN_TIME_SINCE_LAST).to(MAX_TIME_SINCE_LAST).hours.do(main)
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
