@@ -8,7 +8,7 @@ We hold no liability for what you do with this script or what happens to you by 
 
 ## Dependencies
 
-1. `pip install -r requirements`
+1. `pip install -r requirements.txt`
     
 You will also need to create an app account on Twitter: [[instructions]](https://dev.twitter.com/apps)
 
