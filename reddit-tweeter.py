@@ -129,7 +129,12 @@ def get_media(img_url):
             with open(img_path, 'wb') as image_file:
                 for chunk in resp:
                     image_file.write(chunk)
-            # Return the path of the image, which is always the same since we just overwrite images
+            
+            if os.path.getsize(img_path) >= (3072 * 1024):
+                print('[bot] File size too big for twitter. Deleting image and continuing')
+                os.remove(img_path)
+                return ''
+            
             return img_path
         else:
             print('[bot] Image failed to download. Status code: ' + resp.status_code)
