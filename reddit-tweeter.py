@@ -8,7 +8,7 @@ import os
 import urllib.parse
 import random
 import configparser
-
+import sys
 
 def setup_connection_reddit(subreddit):
     """Creates a read-only connection to the reddit API."""
@@ -31,14 +31,11 @@ def strip_title(title, num_characters):
 
 def already_tweeted(post_id):
     """ Checks if the reddit Twitter bot has already tweeted a post. """
-    found = False
     with open('cache.txt', 'r') as in_file:
         for line in in_file.read().split(', '):
             if line == post_id:
-                found = True
-                break
-    in_file.close()
-    return found
+                return True
+    return False
 
 
 def passes_criteria(submission):
@@ -77,7 +74,7 @@ def grabber_func(subreddit_info):
         # only insert records that aren't already tweeted
         if submission.stickied is False and passes_criteria(submission):
             return submission
-          else:
+        else:
             print('[bot] Not tweeting {}: Failed criteria.\n'.format(str(submission.id)))
     
     return None
@@ -100,7 +97,12 @@ def tweeter_func(twitter_api, submission):
 
     if img_path:
         print('[bot] With image ' + img_path)
-        twitter_api.update_with_media(filename=img_path, status=post_text)
+        try:
+            twitter_api.update_with_media(filename=img_path, status=post_text)
+        except TweepError:
+            print('[bot] Error submitting tweet! Deleting image and exiting.')
+            os.remove(img_path)
+            sys.exit()
         os.remove(img_path)  # remove image from disk once tweeted
         print('[bot] Deleted image')
     else:
@@ -109,7 +111,6 @@ def tweeter_func(twitter_api, submission):
     print('[bot] Marking post as tweeted')
     with open('cache.txt', 'a+') as file:
         file.write(submission.id+', ')
-    file.close()
 
 
 def get_media(img_url):
