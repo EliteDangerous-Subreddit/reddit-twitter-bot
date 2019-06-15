@@ -13,6 +13,9 @@ You will need to install Python's [tweepy](https://github.com/tweepy/tweepy), [s
     pip install tweepy
     pip install praw
     pip install schedule
+
+Alternatively, using the requirements file should do it.
+1. `pip install -r requirements.txt`
     
 You will also need to create an app account on Twitter: [[instructions]](https://dev.twitter.com/apps)
 

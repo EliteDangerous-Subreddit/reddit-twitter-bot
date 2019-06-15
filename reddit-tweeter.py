@@ -8,8 +8,8 @@ import os
 import urllib.parse
 import random
 import configparser
-import time
-
+from datetime import datetime
+import sys
 
 def setup_connection_reddit(subreddit):
     """Creates a read-only connection to the reddit API."""
@@ -32,14 +32,11 @@ def strip_title(title, num_characters):
 
 def already_tweeted(post_id):
     """ Checks if the reddit Twitter bot has already tweeted a post. """
-    found = False
     with open('cache.txt', 'r') as in_file:
         for line in in_file.read().split(', '):
             if line == post_id:
-                found = True
-                break
-    in_file.close()
-    return found
+                return True
+    return False
 
 
 def passes_criteria(submission):
@@ -50,7 +47,8 @@ def passes_criteria(submission):
         (SPOILERS_ALLOWED is False) and submission.spoiler,
         any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]),
         any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]),
-        submission.score < POST_SCORE_THRESHOLD
+        submission.score < POST_SCORE_THRESHOLD,
+        already_tweeted(submission.id) is True
     ]
 
     if any(conditionals):
@@ -62,7 +60,7 @@ def grabber_func(subreddit_info):
     """ Gets a post from the subreddit for tweeting. """
 
     print('[bot] Getting posts from reddit\n')
-    # roll a dice, if it lands on 6, search for a good rising post
+    # The probability of checking 'rising' is set by the user
     if random.random() <= (float(RISING_PROBABILITY)/100):
         print('[bot] Attempting to find a good rising post')
         for submission in subreddit_info.rising():
@@ -75,13 +73,11 @@ def grabber_func(subreddit_info):
     # Cycles through hot posts
     for submission in subreddit_info.hot(limit=15):
         # only insert records that aren't already tweeted
-        if not already_tweeted(submission.id):
-            if submission.stickied is False and passes_criteria(submission):
-                return submission
-            else:
-                print('[bot] Not tweeting {}: Failed criteria.\n'.format(str(submission.id)))
+        if submission.stickied is False and passes_criteria(submission):
+            return submission
         else:
-            print('[bot] Already stored: {}\n'.format(str(submission.id)))
+            print('[bot] Not tweeting {}: Failed criteria.\n'.format(str(submission.id)))
+    
     return None
 
 
@@ -102,7 +98,12 @@ def tweeter_func(twitter_api, submission):
 
     if img_path:
         print('[bot] With image ' + img_path)
-        twitter_api.update_with_media(filename=img_path, status=post_text)
+        try:
+            twitter_api.update_with_media(filename=img_path, status=post_text)
+        except TweepError:
+            print('[bot] Error submitting tweet! Deleting image and exiting.')
+            os.remove(img_path)
+            sys.exit()
         os.remove(img_path)  # remove image from disk once tweeted
         print('[bot] Deleted image')
     else:
@@ -111,7 +112,6 @@ def tweeter_func(twitter_api, submission):
     print('[bot] Marking post as tweeted')
     with open('cache.txt', 'a+') as file:
         file.write(submission.id+', ')
-    file.close()
 
 
 def get_media(img_url):
@@ -130,7 +130,12 @@ def get_media(img_url):
             with open(img_path, 'wb') as image_file:
                 for chunk in resp:
                     image_file.write(chunk)
-            # Return the path of the image, which is always the same since we just overwrite images
+            
+            if os.path.getsize(img_path) >= (3072 * 1024):
+                print('[bot] File size too big for twitter. Deleting image and continuing')
+                os.remove(img_path)
+                return ''
+            
             return img_path
         else:
             print('[bot] Image failed to download. Status code: ' + resp.status_code)
