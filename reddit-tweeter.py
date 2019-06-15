@@ -49,7 +49,8 @@ def passes_criteria(submission):
         (SPOILERS_ALLOWED is False) and submission.spoiler,
         any([keyword in submission.title.lower() for keyword in EXCLUDED_KEYWORDS]),
         any([flair == str(submission.link_flair_text).replace('None', '').lower() for flair in EXCLUDED_FLAIRS]),
-        submission.score < POST_SCORE_THRESHOLD
+        submission.score < POST_SCORE_THRESHOLD,
+        already_tweeted(submission.id) is True
     ]
 
     if any(conditionals):
@@ -74,13 +75,11 @@ def grabber_func(subreddit_info):
     # Cycles through hot posts
     for submission in subreddit_info.hot(limit=15):
         # only insert records that aren't already tweeted
-        if not already_tweeted(submission.id):
-            if submission.stickied is False and passes_criteria(submission):
-                return submission
-            else:
-                print('[bot] Not tweeting {}: Failed criteria.\n'.format(str(submission.id)))
-        else:
-            print('[bot] Already stored: {}\n'.format(str(submission.id)))
+        if submission.stickied is False and passes_criteria(submission):
+            return submission
+          else:
+            print('[bot] Not tweeting {}: Failed criteria.\n'.format(str(submission.id)))
+    
     return None
 
 
